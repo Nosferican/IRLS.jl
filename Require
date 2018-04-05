@@ -1,1 +1,2 @@
-julia 0.7-Dev
+julia 0.7.0-DEV.4741
+LinearAlgebra
