@@ -1,0 +1,24 @@
+language: julia
+
+os:
+    - linux
+
+julia:
+    - nightly
+
+matrix:
+    allow_failures:
+        - julia: nightly
+
+notifications:
+    email: false
+
+sudo: false
+
+script:
+    - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+    - julia -e 'Pkg.clone(pwd()); Pkg.build("IRLS")'
+    - julia -e 'Pkg.test("IRLS", coverage=true)'
+
+after_success:
+    - julia -e 'cd(Pkg.dir("IRLS")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(process_folder())'
