@@ -10,7 +10,7 @@ using Base.LinAlg: qrfact, cholfact!
 using Base.LinAlg: norm
 
 using StatsFuns: logistic
-using Distributions: Normal, Bernoulli, Binomial, Poisson
+using Distributions: Distribution, Normal, Bernoulli, Binomial, Poisson
 
 """
     AbstractLink
