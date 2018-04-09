@@ -9,36 +9,8 @@ using Base.LinAlg: qrfact, cholfact!
 # Vector functions
 using Base.LinAlg: norm
 
-"""
-    Distribution
-
-Abstract type for distributions.
-"""
-abstract type Distribution end
-"""
-    Normal <: Distribution
-
-Return a contrete type of the normal distribution.
-"""
-struct Normal <: Distribution end
-"""
-    Bernoulli <: Distribution
-
-Return a contrete type of the Bernoulli distribution.
-"""
-struct Bernoulli <: Distribution end
-"""
-    Binomial <: Distribution
-
-Return a contrete type of the Binomial distribution.
-"""
-struct Binomial <: Distribution end
-"""
-    Poisson <: Distribution
-
-Return a contrete type of the Poisson distribution.
-"""
-struct Poisson <: Distribution end
+using StatsFuns: logistic
+using Distributions: Normal, Bernoulli, Binomial, Poisson
 
 """
     AbstractLink
@@ -74,13 +46,6 @@ canonicallink(obj::Distribution) = error("canonicallink is not defined for $(typ
 canonicallink(obj::Normal) = IdentityLink()
 canonicallink(obj::Union{Bernoulli,Binomial}) = LogitLink()
 canonicallink(obj::Poisson) = LogLink()
-
-"""
-    logistic <: AbstractLink
-
-Return a contrete type of the log link function.
-"""
-logistic(obj::Real) = inv(exp(-obj) + one(obj))
 
 """
     μμ′σ²(::Distribution, ::AbstractLink, ::AbstractVector{<:Real})
