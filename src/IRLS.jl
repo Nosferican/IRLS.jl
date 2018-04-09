@@ -3,11 +3,11 @@ __precompile__()
 module IRLS
 
 # Special Matrices
-using LinearAlgebra: Diagonal, Hermitian, LowerTriangular, UpperTriangular
+using Base.LinAlg: Diagonal, Hermitian, LowerTriangular, UpperTriangular
 # Factorizations
-using LinearAlgebra: qrfact, cholfact!
+using Base.LinAlg: qrfact, cholfact!
 # Vector functions
-using LinearAlgebra: norm
+using Base.LinAlg: norm
 
 """
     Distribution
@@ -93,9 +93,9 @@ of the distribution evaluated at the given value.
 
 function μμ′σ²(distribution::Distribution, link::AbstractLink, η::AbstractVector{<:Real})
     m    = length(η)
-    μ    = Vector{Float64}(undef, m)
-    μ′ = Vector{Float64}(undef, m)
-    σ²   = Vector{Float64}(undef, m)
+    μ    = Vector{Float64}(m)
+    μ′ = Vector{Float64}(m)
+    σ²   = Vector{Float64}(m)
     @inbounds for idx ∈ eachindex(μ, μ′, σ², η)
         μ[idx], μ′[idx], σ²[idx] = μμ′σ²(distribution, link, η[idx])
     end

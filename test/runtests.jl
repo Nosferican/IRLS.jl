@@ -1,3 +1,3 @@
-using Test, IRLS
+using Base.Test, IRLS
 
 @test true
