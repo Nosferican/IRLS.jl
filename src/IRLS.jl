@@ -2,76 +2,140 @@ __precompile__()
 
 module IRLS
 
-using LinearAlgebra: BlasReal, norm, qrfact, cholfact!, Hermitian, LowerTriangular, UpperTriangular
+# Special Matrices
+using LinearAlgebra: Diagonal, Hermitian, LowerTriangular, UpperTriangular
+# Factorizations
+using LinearAlgebra: qrfact, cholfact!
+# Vector functions
+using LinearAlgebra: norm
 
+"""
+    Distribution
+
+Abstract type for distributions.
+"""
 abstract type Distribution end
+"""
+    Normal <: Distribution
+
+Return a contrete type of the normal distribution.
+"""
 struct Normal <: Distribution end
+"""
+    Bernoulli <: Distribution
+
+Return a contrete type of the Bernoulli distribution.
+"""
 struct Bernoulli <: Distribution end
+"""
+    Binomial <: Distribution
+
+Return a contrete type of the Binomial distribution.
+"""
+struct Binomial <: Distribution end
+"""
+    Poisson <: Distribution
+
+Return a contrete type of the Poisson distribution.
+"""
 struct Poisson <: Distribution end
 
+"""
+    AbstractLink
+
+Abstract type for link functions.
+"""
 abstract type AbstractLink end
+"""
+    IdentityLink <: AbstractLink
+
+Return a contrete type of the identity link function.
+"""
 struct IdentityLink <: AbstractLink end
+"""
+    LogitLink <: AbstractLink
+
+Return a contrete type of the logit link function.
+"""
 struct LogitLink <: AbstractLink end
+"""
+    LogLink <: AbstractLink
+
+Return a contrete type of the log link function.
+"""
 struct LogLink <: AbstractLink end
 
+"""
+    canonicallink(::Distribution)
+
+Return the canonical link function for the distribution.
+"""
+canonicallink(obj::Distribution) = error("canonicallink is not defined for $(typeof(obj))")
+canonicallink(obj::Normal) = IdentityLink()
+canonicallink(obj::Union{Bernoulli,Binomial}) = LogitLink()
+canonicallink(obj::Poisson) = LogLink()
+
+"""
+    logistic <: AbstractLink
+
+Return a contrete type of the log link function.
+"""
 logistic(obj::Real) = inv(exp(-obj) + one(obj))
 
-linkinv(::IdentityLink, η::BlasReal) = η
-linkinv(::LogitLink, η::BlasReal) = logistic(η)
-linkinv(::LogLink, η::BlasReal) = exp(η)
-
-function ∂μ∂η(::LogitLink, η::Real)
-    output = logistic(η)
-    output *= (one(output) - output)
-    return output
-end
-
 """
-    μ∂μ∂ησ(::Distribution, ::AbstractLink, ::Real)
+    μμ′σ²(::Distribution, ::AbstractLink, ::AbstractVector{<:Real})
+    μμ′σ²(::Distribution, ::AbstractLink, ::Real)
 
-Return the value of the inverse link function, its derivative
-and the standard deviation of the distribution evaluated at the
-given value.
+Return the value of the inverse link function, its derivative and the variance
+of the distribution evaluated at the given value.
 """
-function μ∂μ∂ησ(::Distribution, ::AbstractLink, η::Real)
-end
+μμ′σ²(::Distribution, ::AbstractLink, η::Real) = error("μμ′σ² is not defined for that combination of arguments.")
 
-function μ∂μ∂ησ(::Normal, ::IdentityLink, η::Real)
-    return (η, one(Float64), 1)
+function μμ′σ²(distribution::Distribution, link::AbstractLink, η::AbstractVector{<:Real})
+    m    = length(η)
+    μ    = Vector{Float64}(undef, m)
+    μ′ = Vector{Float64}(undef, m)
+    σ²   = Vector{Float64}(undef, m)
+    @inbounds for idx ∈ eachindex(μ, μ′, σ², η)
+        μ[idx], μ′[idx], σ²[idx] = μμ′σ²(distribution, link, η[idx])
+    end
+    return (μ, μ′, σ²)
 end
-function μ∂μ∂ησ(::Bernoulli, ::LogitLink, η::Real)
+function μμ′σ²(::Normal, ::IdentityLink, η::Real)
+    return (η, one(Float64), one(Float64))
+end
+function μμ′σ²(::Union{Bernoulli,Binomial}, ::LogitLink, η::Real)
     g  = logistic(η)
     g′ = g * (one(g) - g)
-    σ  = sqrt(η * (one(η) - η))
-    return (g, g′, σ)
+    σ²  = g′
+    return (g, g′, σ²)
 end
-function μ∂μ∂ησ(::Poisson, ::LogLink, η::Real)
+function μμ′σ²(::Poisson, ::LogLink, η::Real)
     g  = exp(η)
-    return (g, g, sqrt(η))
+    return (g, g, g)
 end
-crossprod(obj::AbstractVector{<:Number}) = obj'obj
-crossprod(obj::AbstractMatrix{<:Real}) = Hermitian(obj'obj)
 
-function irls(A::AbstractMatrix{<:BlasReal},
-              b::AbstractVector{<:BlasReal},
-              distribution::Distribution,
-              link::AbstractLink)
+function irls(A::AbstractMatrix{<:Real},
+              b::AbstractVector{<:Real},
+              distribution::Distribution;
+              link::AbstractLink = canonicallink(distribution),
+              maxit::Integer = 25)
     F = qrfact(A)
     Q = Matrix(F.Q)
     m, n = size(A)
-    x = Vector{Float64}(undef, n)
-    η = Vector{Float64}(undef, m)
+    x = fill(zero(Float64), n)
+    η = fill(zero(Float64), m)
     w = Vector{Float64}(undef, m)
-    for itt ∈ 1:50
-        μ, ∂μ∂η, σ = μ∂μ∂ησ.(distribution, link, η)
-        z  = η + (b - μ) ./ ∂μ∂η
-        w  = ∂μ∂η ./ σ
+    for itt ∈ 1:maxit
+        μ, μ′, σ² = μμ′σ²(distribution, link, η)
+        z  = η + (b - μ) ./ μ′
+        w  = μ′.^2 ./ σ²
         x₀ = x
-        C  = cholfact!(crossprod(w .* Q)).factors
-        x  = LowerTriangular(C') \ (Q' * (w .* z))
+        C  = cholfact!(Hermitian(Q' * Diagonal(w) * Q)).factors
+        x  = LowerTriangular(C') \ (Q' * Diagonal(w) * z)
         x  = UpperTriangular(C) \ x
         η  = Q * x
-        norm(x - x₀, 2) < 1e-8 && return F \ η
+        norm(x - x₀, 2) < 1e-8 && return (F \ η, w)
     end
 end
 export
